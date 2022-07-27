@@ -3,9 +3,37 @@
 # Januari 2020
 
 import numpy as np
+import matplotlib.pyplot as plt
+import math
+from scipy.spatial.distance import euclidean
+
 
 # Population Class
+from sources.kin import KinematicPart
 from sources.robot import RobotArm
+from sources.robot2 import Robot
+import tensorflow as tf
+r = np.pi / 180.0
+
+Z1 = KinematicPart(300, 0, np.pi / 2, bmin=-185 * r, bmax=185 * r)
+Z2 = KinematicPart(0, 250, 0, bmin=50 * r, bmax=270 * r)
+Z3 = KinematicPart(0, 160, 0, bmin=-360 * r, bmax=360 * r)
+Z4 = KinematicPart(0, 0, np.pi / 2, bmin=180 * r, bmax=180 * r)
+Z5 = KinematicPart(0, 104.9, np.pi / 2, bmin=-5 * r, bmax=15 * r)
+Q01 = tf.Variable(0 * r, dtype=tf.float32)
+Q12 = tf.Variable(90 * r, dtype=tf.float32)
+Q23 = tf.Variable(270 * r, dtype=tf.float32)
+Q34 = tf.Variable(180 * r, dtype=tf.float32, trainable=False)
+Q45 = tf.Variable(0 * r, dtype=tf.float32)
+Q0 = [Q01, Q12, Q23, Q34, Q45]
+parts = [Z1, Z2, Z3, Z4, Z5]#, Z6]
+target = tf.Variable([[263], [0], [550]], dtype=tf.float32)
+RV = Robot(parts)
+
+def loss_function(Q0):
+    xyz = RV.getXYZ(Q0)
+    penalty = RV.penalty(Q0, 1, 1)
+    return euclidean(target.numpy(), xyz.numpy())
 
 
 class Population:
@@ -40,7 +68,7 @@ class Population:
 class GeneticAlgorithm:
     def __init__(self, n_generations=10, n_populations=5, prob_crossover=1.0, prob_mutation=0.1, k=3):
         # Here we define simple 2 link arm robot with length l1 = 50 and l2 = 50
-        self.robot = RobotArm(links=[50, 50, 50])
+        self.robot = RV#RobotArm(links=[50, 50, 50])
         # Initialize GA parameter
         self.n_generations = n_generations
         self.n_populations = n_populations
@@ -123,19 +151,25 @@ class GeneticAlgorithm:
                                    gen=child_1_genotype, use_random=False)
                 joint_1, joint_2, joint_3 = child.phenotype
                 # Get fitness value of new children
-                child.fitness = self.robot.calc_distance_error([joint_1, joint_2, joint_3])
+                Q0[1].assign(tf.Variable(joint_1, dtype=tf.float32))
+                Q0[2].assign_add(tf.Variable(joint_2, dtype=tf.float32))
+                child.fitness = loss_function(Q0)#self.robot.calc_distance_error([joint_1, joint_2, joint_3])
                 child_populations.append(child)
 
                 child = Population(l=16, limits=[(-np.pi, np.pi), (-np.pi, np.pi), (-np.pi, np.pi)],
                                    gen=child_2_genotype, use_random=False)
                 joint_1, joint_2, joint_3 = child.phenotype
-                child.fitness = self.robot.calc_distance_error([joint_1, joint_2, joint_3])
+                Q0[1].assign(tf.Variable(joint_1, dtype=tf.float32))
+                Q0[2].assign_add(tf.Variable(joint_2, dtype=tf.float32))
+                child.fitness = loss_function(Q0)
                 child_populations.append(child)
 
                 child = Population(l=16, limits=[(-np.pi, np.pi), (-np.pi, np.pi), (-np.pi, np.pi)],
                                    gen=child_3_genotype, use_random=False)
                 joint_1, joint_2, joint_3 = child.phenotype
-                child.fitness = self.robot.calc_distance_error([joint_1, joint_2, joint_3])
+                Q0[1].assign(tf.Variable(joint_1, dtype=tf.float32))
+                Q0[2].assign_add(tf.Variable(joint_2, dtype=tf.float32))
+                child.fitness = loss_function(Q0)
                 child_populations.append(child)
 
             # Update current parent with new child and track best population
@@ -160,7 +194,7 @@ class GeneticAlgorithm:
 
 
 def main():
-    ga = GeneticAlgorithm(n_generations=80, n_populations=100, k=20)
+    ga = GeneticAlgorithm(n_generations=100, n_populations=100, k=20)
     ga.run()
 
 
