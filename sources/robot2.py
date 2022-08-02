@@ -1,4 +1,4 @@
-import tensorflow as tf
+import numpy as np
 
 class Robot:
     parts = []
@@ -16,7 +16,7 @@ class Robot:
 
     def penalty(self, Q, W1=1, W2=1):
 
-        reduce_to_nil = lambda n: tf.cond(n > 0,
+        reduce_to_nil = lambda n: np.cond(n > 0,
                                           lambda: tf.constant(0, dtype=tf.float32), lambda: tf.abs(n))
 
         return W1 * tf.reduce_sum(

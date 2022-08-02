@@ -67,9 +67,9 @@ class GeneticAlgorithm:
                                       self.populations[parent_1_idx].genotype[split_idx[2]:]))
 
         child_3_genotype = np.hstack((self.populations[parent_3_idx].genotype[0:split_idx[0]], \
-                                      self.populations[parent_1_idx].genotype[split_idx[0]:split_idx[1]], \
+                                      self.populations[parent_2_idx].genotype[split_idx[0]:split_idx[1]], \
                                       self.populations[parent_3_idx].genotype[split_idx[1]:split_idx[2]], \
-                                      self.populations[parent_1_idx].genotype[split_idx[2]:]))
+                                      self.populations[parent_2_idx].genotype[split_idx[2]:]))
         return child_1_genotype, child_2_genotype, child_3_genotype
 
     # Mutation operation of children genotype, result in new children genotype

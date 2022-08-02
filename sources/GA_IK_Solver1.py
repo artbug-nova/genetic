@@ -2,38 +2,134 @@
 # By : Eko Rudiawan
 # Januari 2020
 
-import numpy as np
 import matplotlib.pyplot as plt
-import math
-from scipy.spatial.distance import euclidean
+import numpy as np
 
 
 # Population Class
-from sources.kin import KinematicPart
-from sources.robot import RobotArm
-from sources.robot2 import Robot
-import tensorflow as tf
+
+class Robot:
+    parts = []
+    penaltiesMin = None
+    penaltiesMax = None
+
+    def __init__(self, parts):
+        self.parts = parts
+        self.penaltiesMin = [(p.borderMin) for p in self.parts]
+        self.penaltiesMax = [(p.borderMax) for p in self.parts]
+
+    '''
+    Получить значение штрафа для данных обобщенных координат
+    '''
+
+
+    def penalty(self, Q, W1=1, W2=1):
+
+        #lambda (t): (200 * exp(-t)) if t > 200 else (400 * exp(-t))
+        reduce_to_nil = lambda n: 0 if n > 0 else np.abs(n)
+
+        subtract = np.subtract(Q, self.penaltiesMin)
+        np_subtract = np.subtract(self.penaltiesMax, Q)
+        return W1 * np.sum(list(map(reduce_to_nil, subtract))) \
+               + W2 * np.sum(list(map(reduce_to_nil, np_subtract)))
+
+    '''
+    Получить координаты схвата (конечного звена)
+    '''
+
+    def getXYZ(self, Q):
+        return self.getXYZPair(Q, len(self.parts))[:3]
+
+    '''
+    Получить координаты конкретной пары 
+    '''
+
+    def getXYZPair(self, Q, pair):
+
+        resultMatrix = np.eye(4, dtype=np.float32)
+
+        for i, p in enumerate(self.parts):
+
+            if i == pair:
+                break
+
+            resultMatrix = np.matmul(resultMatrix, p.getMatrix(Q[i]))
+
+        xyz1 = np.matmul(resultMatrix, [[0], [0], [0], [1]])
+
+        return xyz1
+
+    '''
+    Массив координат всех пар (для построения графика)
+    '''
+
+    def getPairPoints(self, Q):
+
+        result = []
+
+        for i, p in enumerate(self.parts):
+            pairXYZ = self.getXYZPair(Q, i)
+            result.append([pairXYZ[0], pairXYZ[1], pairXYZ[2]])
+
+        return result
+
+
+
+
+class KinematicPart:
+    s = 0
+    a = 0
+    alpha = 0
+
+    borderMin = 0
+    borderMax = 0
+
+    def __init__(self, s, a, alpha, bmin, bmax):
+        self.s = s
+        self.a = a
+        self.alpha = alpha
+        self.borderMin = bmin
+        self.borderMax = bmax
+
+    def getMatrix(self, q):
+        return [
+            [np.cos(q), -np.sin(q) * np.cos(self.alpha), np.sin(q) * np.sin(self.alpha), self.a * np.cos(q)],
+            [np.sin(q), np.cos(q) * np.cos(self.alpha), -np.cos(q) * np.sin(self.alpha), self.a * np.sin(q)],
+            [0, np.sin(self.alpha), np.cos(self.alpha), self.s],
+            [0, 0, 0, 1]]
+
+
 r = np.pi / 180.0
 
+#
 Z1 = KinematicPart(300, 0, np.pi / 2, bmin=-185 * r, bmax=185 * r)
 Z2 = KinematicPart(0, 250, 0, bmin=50 * r, bmax=270 * r)
 Z3 = KinematicPart(0, 160, 0, bmin=-360 * r, bmax=360 * r)
-Z4 = KinematicPart(0, 0, np.pi / 2, bmin=180 * r, bmax=180 * r)
-Z5 = KinematicPart(0, 104.9, np.pi / 2, bmin=-5 * r, bmax=15 * r)
-Q01 = tf.Variable(0 * r, dtype=tf.float32)
-Q12 = tf.Variable(90 * r, dtype=tf.float32)
-Q23 = tf.Variable(270 * r, dtype=tf.float32)
-Q34 = tf.Variable(180 * r, dtype=tf.float32, trainable=False)
-Q45 = tf.Variable(0 * r, dtype=tf.float32)
-Q0 = [Q01, Q12, Q23, Q34, Q45]
+Z4 = KinematicPart(0, 0, np.pi / 2, bmin=-10 * r, bmax=10 * r)
+Z5 = KinematicPart(0, 104.9, np.pi / 2, bmin=0 * r, bmax=0 * r)
+
 parts = [Z1, Z2, Z3, Z4, Z5]#, Z6]
-target = tf.Variable([[263], [0], [550]], dtype=tf.float32)
+
 RV = Robot(parts)
 
-def loss_function(Q0):
+
+Q01 = 0 * r
+Q12 = 90 * r
+Q23 = 270 * r
+Q34 = 0 * r
+Q45 = 0 * r
+
+targets = [[264], [0], [550.9]]
+
+Q0 = [Q01, Q12, Q23, Q34, Q45]
+
+def loss_function(Q0, target):
     xyz = RV.getXYZ(Q0)
-    penalty = RV.penalty(Q0, 1, 1)
-    return euclidean(target.numpy(), xyz.numpy())
+    penalty = RV.penalty(Q0, 0.2, 0.2)
+    powers = (target - xyz) ** 2
+    return np.sum(np.sqrt(powers)) + penalty
+    #return euclidean(target, xyz) + penalty
+
 
 
 class Population:
@@ -95,9 +191,9 @@ class GeneticAlgorithm:
                                       self.populations[parent_1_idx].genotype[split_idx[2]:]))
 
         child_3_genotype = np.hstack((self.populations[parent_3_idx].genotype[0:split_idx[0]], \
-                                      self.populations[parent_1_idx].genotype[split_idx[0]:split_idx[1]], \
+                                      self.populations[parent_2_idx].genotype[split_idx[0]:split_idx[1]], \
                                       self.populations[parent_3_idx].genotype[split_idx[1]:split_idx[2]], \
-                                      self.populations[parent_1_idx].genotype[split_idx[2]:]))
+                                      self.populations[parent_2_idx].genotype[split_idx[2]:]))
         return child_1_genotype, child_2_genotype, child_3_genotype
 
     # Mutation operation of children genotype, result in new children genotype
@@ -151,25 +247,29 @@ class GeneticAlgorithm:
                                    gen=child_1_genotype, use_random=False)
                 joint_1, joint_2, joint_3 = child.phenotype
                 # Get fitness value of new children
-                Q0[1].assign(tf.Variable(joint_1, dtype=tf.float32))
-                Q0[2].assign_add(tf.Variable(joint_2, dtype=tf.float32))
-                child.fitness = loss_function(Q0)#self.robot.calc_distance_error([joint_1, joint_2, joint_3])
+                Q0[1] = joint_1
+                Q0[2] = joint_2
+                Q0[3] = joint_3
+
+                child.fitness = loss_function(Q0, targets)#self.robot.calc_distance_error([joint_1, joint_2, joint_3])
                 child_populations.append(child)
 
                 child = Population(l=16, limits=[(-np.pi, np.pi), (-np.pi, np.pi), (-np.pi, np.pi)],
                                    gen=child_2_genotype, use_random=False)
                 joint_1, joint_2, joint_3 = child.phenotype
-                Q0[1].assign(tf.Variable(joint_1, dtype=tf.float32))
-                Q0[2].assign_add(tf.Variable(joint_2, dtype=tf.float32))
-                child.fitness = loss_function(Q0)
+                Q0[1] = joint_1
+                Q0[2] = joint_2
+                Q0[3] = joint_3
+                child.fitness = loss_function(Q0, targets)
                 child_populations.append(child)
 
                 child = Population(l=16, limits=[(-np.pi, np.pi), (-np.pi, np.pi), (-np.pi, np.pi)],
                                    gen=child_3_genotype, use_random=False)
                 joint_1, joint_2, joint_3 = child.phenotype
-                Q0[1].assign(tf.Variable(joint_1, dtype=tf.float32))
-                Q0[2].assign_add(tf.Variable(joint_2, dtype=tf.float32))
-                child.fitness = loss_function(Q0)
+                Q0[1] = joint_1
+                Q0[2] = joint_2
+                Q0[3] = joint_3
+                child.fitness = loss_function(Q0, targets)
                 child_populations.append(child)
 
             # Update current parent with new child and track best population
@@ -180,7 +280,10 @@ class GeneticAlgorithm:
                 if self.populations[i].fitness < best_fitness:
                     best_idx = i
                     best_fitness = self.populations[i].fitness
-            print("Best Population :", self.populations[best_idx].phenotype, self.populations[best_idx].fitness)
+            print("Best Population :", Q0, self.populations[best_idx].fitness)
+            print("================================================================================")
+            xyz = RV.getXYZ(Q0)
+            print(xyz)
             print("================================================================================")
         return self.populations[best_idx].phenotype
 
@@ -190,11 +293,26 @@ class GeneticAlgorithm:
         # Solving the solution with GA
         joint1, joint2, joint3 = self.evolution()
         # Plot robot configuration
-        self.robot.plot([joint1, joint2, joint3])
+        xyz = RV.getXYZ(Q0)
+        print(xyz)
+
+        xyz1 = RV.getXYZPair(Q0, 1)
+        xyz2 = RV.getXYZPair(Q0, 2)
+        xyz3 = RV.getXYZPair(Q0, 3)
+        xyz4 = RV.getXYZPair(Q0, 4)
+
+        fig, ax = plt.subplots()
+        ax.plot([xyz1[0], xyz2[0], xyz3[0], xyz4[0], xyz[0]], [xyz1[2], xyz2[2], xyz3[2], xyz4[2], xyz[2]])
+        ax.set_title('matplotlib.axes.Axes.plot() example 1')
+        fig.canvas.draw()
+        plt.grid()
+        plt.show()
+
+        #self.robot.plot([joint1, joint2, joint3])
 
 
 def main():
-    ga = GeneticAlgorithm(n_generations=100, n_populations=100, k=20)
+    ga = GeneticAlgorithm(n_generations=1000, n_populations=100, k=20)
     ga.run()
 
 
