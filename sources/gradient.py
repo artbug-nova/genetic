@@ -125,10 +125,18 @@ def loss_function(Q0, target):
 
 traj = [
     [[264], [0], [550.9]],
-    [[263], [0], [552]],
-    [[265], [0], [550]],
-    [[266], [0], [549]],
-    [[263], [0], [552]],
+    [[255], [0], [548]],
+    [[260], [0], [540]],
+    [[230], [0], [520]],
+    [[250], [0], [530]],
+    [[270], [0], [500]],
+    [[300], [0], [550]],
+    #[[264.2], [0], [550]],
+    #[[264.8], [0], [550.5]],
+    # [[263], [0], [552]],
+    # [[265], [0], [550]],
+    # [[266], [0], [549]],
+    # [[263], [0], [552]],
     # [[264.6], [0], [550.4]],
     # [[264.4], [0], [550.6]],
     # [[264.2], [0], [550.8]],
@@ -140,10 +148,10 @@ j = 0
 for val in traj:
     target = val
     looses = 11
-    delta_q = 0.02 * r
+    delta_q = 0.2 * r
     delta = [0, delta_q, 0, 0, 0]
     ik = 1
-    while looses > 0.2:
+    while looses > 0.7:
         function = loss_function(Q0, target)
         if ik % 3 == 0:
             delta = [0, 0, 0, delta_q, 0]
@@ -152,9 +160,9 @@ for val in traj:
         else:
             delta = [0, delta_q, 0, 0, 0]
         n = loss_function(np.add(Q0, delta), target)
-
+        #if n < looses:
         prir = (n - function) / delta_q
-        if n < 0.2:
+        if n < 0.7:
             looses = n
             if ik % 3 == 0:
                 Q0[3] = Q0[3] + delta_q
@@ -179,9 +187,9 @@ for val in traj:
             plt.show()
 
         else:
-            f1 = 0.000025 * prir
-            f2 = 0.000025 * prir
-            f3 = 0.000025 * prir
+            f1 = 0.0000025 * prir
+            f2 = 0.0000025 * prir
+            f3 = 0.0000025 * prir
             if ik % 3 == 0:
                 Q0[3] = Q0[3] - f3
             elif ik % 2 == 0:
@@ -211,9 +219,23 @@ for val in traj:
                 # plt.grid()
                 # plt.show()
 
-            ik = ik + 1
+        ik = ik + 1
 
 
+xyz = RV.getXYZ(Q0)
+print(xyz)
+
+xyz1 = RV.getXYZPair(Q0, 1)
+xyz2 = RV.getXYZPair(Q0, 2)
+xyz3 = RV.getXYZPair(Q0, 3)
+xyz4 = RV.getXYZPair(Q0, 4)
+
+fig, ax = plt.subplots()
+ax.plot([xyz1[0], xyz2[0], xyz3[0], xyz4[0], xyz[0]], [xyz1[2], xyz2[2], xyz3[2], xyz4[2], xyz[2]])
+ax.set_title('matplotlib.axes.Axes.plot() example 1')
+fig.canvas.draw()
+plt.grid()
+plt.show()
 
 
 # # Plot joint configuration result
